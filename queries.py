@@ -86,4 +86,151 @@ class Database:
         finally:
             self.close_connection()
 
+    def get_id_clients(self):
+        try:
+            cursor = self.connection.cursor()
+            query = f"""SELECT id_client FROM clients"""
+            cursor.execute(query)
+            result = cursor.fetchall()
+            result = [item for sub_tuple in result for item in sub_tuple]
+            return result
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
 
+    def get_id_products(self):
+        try:
+            cursor = self.connection.cursor()
+            query = f"""SELECT id_product FROM products"""
+            cursor.execute(query)
+            result = cursor.fetchall()
+            result = [item for sub_tuple in result for item in sub_tuple]
+            return result
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def save_to_db_categories(self, item):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''INSERT INTO categories (name_cat) VALUES (%s)'''
+            cursor.execute(query, item)
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def save_to_db_clients(self, item):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''INSERT INTO clients (name, surname, patronymic, phone) VALUES (%s, %s, %s, %s)'''
+            cursor.execute(query, item)
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def get_id_categories(self):
+        try:
+            cursor = self.connection.cursor()
+            query = f"""SELECT id_category FROM categories"""
+            cursor.execute(query)
+            result = cursor.fetchall()
+            result = [item for sub_tuple in result for item in sub_tuple]
+            return result
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def save_to_db_clients(self, item):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''INSERT INTO clients (name, surname, patronymic, phone) VALUES (%s, %s, %s, %s)'''
+            cursor.execute(query, item)
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def get_id_by_name(self, item):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''SELECT id_category FROM categories WHERE name_cat = %s'''
+            cursor.execute(query, item)
+            return cursor.fetchall()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def save_to_db_products(self, row_values):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''INSERT INTO products (category, name_prod, price, quantity) VALUES (%s, %s, %s, %s)'''
+            cursor.execute(query, row_values)
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def save_to_db_sales(self, item):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''INSERT INTO sales (client, date, product, quantity, amount) VALUES (%s, %s, %s, %s, %s)'''
+            cursor.execute(query, item)
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def update_categories(self, item, old_value):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''UPDATE categories SET name_cat = %s WHERE name_cat = %s'''
+            cursor.execute(query, (item, old_value))
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def update_clients(self, id_client, column, new_value):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''UPDATE clients SET {column} = %s WHERE id_client = %s'''
+            cursor.execute(query, (new_value, id_client))
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def update_products(self, id_pruduct, column, new_value):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''UPDATE products SET {column} = %s WHERE id_product = %s'''
+            cursor.execute(query, (new_value, id_pruduct))
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()
+
+    def update_sales(self, id_sale, column, new_value):
+        try:
+            cursor = self.connection.cursor()
+            query = f'''UPDATE sales SET {column} = %s WHERE id_sale = %s'''
+            cursor.execute(query, (new_value, id_sale))
+            self.connection.commit()
+        except Error as e:
+            print(e)
+        finally:
+            self.close_connection()

@@ -12,6 +12,8 @@ class Sales(object):
     def __init__(self, db):
         super().__init__()
         self.db = db
+        self.old_values = {}
+        self.flag = False
 
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
@@ -131,21 +133,166 @@ class Sales(object):
         self.report_button.setText("Отчёт")
         self.report_button.clicked.connect(lambda: self.go_to_report())
         self.add_button.setText("Добавить")
+        self.add_button.clicked.connect(self.add_sales)
+        self.check_clients_and_products()
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
         self.insert_data()
 
+    def add_sales(self):
+        self.flag = True
+        self.db.connect()
+        clients = self.db.get_id_clients()
+        self.db.connect()
+        products = self.db.get_id_products()
+        client = clients[0]
+        product = products[0]
+        date = '20.12.2024'
+        quantity = 1
+        amount = 5000
+
+        row_position = self.tableWidget.rowCount()
+        self.old_values[row_position] = {'client': client,
+                                         'products':product,
+                                         'date': date,
+                                         'quantity': quantity,
+                                         'amount': amount
+                                         }
+        self.tableWidget.insertRow(row_position)
+        self.tableWidget.setItem(row_position, 0, QTableWidgetItem(str(client)))
+        self.tableWidget.setItem(row_position, 1, QTableWidgetItem(date))
+        self.tableWidget.setItem(row_position, 2, QTableWidgetItem(str(product)))
+        self.tableWidget.setItem(row_position, 3, QTableWidgetItem(str(quantity)))
+        self.tableWidget.setItem(row_position, 4, QTableWidgetItem(str(amount)))
+        self.db.connect()
+        row_values = []
+
+        for column in range(self.tableWidget.columnCount()):
+            item = self.tableWidget.item(row_position, column)
+            if item is not None:
+                row_values.append(item.text())
+
+        self.db.save_to_db_sales(row_values)
+        self.flag = False
+
+    def check_clients_and_products(self):
+        self.db.connect()
+        clients = self.db.get_id_clients()
+        self.db.connect()
+        products = self.db.get_id_products()
+
+        if clients and products:
+            self.add_button.setEnabled(True)
+        else:
+            self.add_button.setEnabled(False)
+
     def insert_data(self):
+
         self.db.connect()
         records = self.db.fetch_all_records('sales')
-
         if records is not None:
             self.tableWidget.setRowCount(len(records))
-            for row_idx, row_data in enumerate(records):
-                for col_idx, col_data in enumerate(row_data[1:]):
-                    item = QtWidgets.QTableWidgetItem(str(col_data))
-                    print(item.text())
-                    self.tableWidget.setItem(row_idx, col_idx, item)
+            for row_index, row in enumerate(records):
+                self.tableWidget.setItem(row_index, 0, QTableWidgetItem(str(row[1])))
+                self.tableWidget.setItem(row_index, 1, QTableWidgetItem(row[2]))
+                self.tableWidget.setItem(row_index, 2, QTableWidgetItem(str(row[3])))
+                self.tableWidget.setItem(row_index, 3, QTableWidgetItem(str(row[4])))
+                self.tableWidget.setItem(row_index, 4, QTableWidgetItem(str(row[5])))
+
+                self.old_values[row_index] = {
+                    'client': row[1],
+                    'date': row[2],
+                    'product': row[3],
+                    'quantity': row[4],
+                    'amount': row[5]
+                }
+        self.tableWidget.itemChanged.connect(self.on_item_changed)
+
+    def on_item_changed(self, item):
+        if not self.flag:
+            row = item.row()
+            column = item.column()
+            self.db.connect()
+            sales = self.db.fetch_all_records('sales')
+            sale_id = sales[row][0]
+
+            if column in [3, 4]:
+                new_value = item.text()
+
+                if not self.is_valid_number(new_value):
+
+                    if column == 3:
+                        item.setText(str(self.old_values[row]['quantity']))
+                    elif column == 4:
+                        item.setText(str(self.old_values[row]['amount']))
+                else:
+                    self.db.connect()
+                    if column == 3:
+                        if '.' not in new_value:
+                            if (int(new_value) % 1 == 0):
+                                self.old_values[row]['quantity'] = int(new_value)
+                                self.db.update_sales(sale_id, 'quantity', new_value)
+                            else:
+                                item.setText(str(self.old_values[row]['quantity']))
+                        else:
+                            item.setText(str(self.old_values[row]['quantity']))
+
+                    elif column == 4:
+                        self.old_values[row]['amount'] = float(new_value)
+                        self.db.update_sales(sale_id, 'amount', new_value)
+
+            elif column in [0]:
+                self.db.connect()
+                clients = self.db.get_id_clients()
+                new_value = item.text()
+                if self.is_valid_number(new_value):
+                    if ('.' not in new_value):
+                        if int(new_value) not in clients:
+                            item.setText(str(self.old_values[row]['client']))
+                        else:
+                            self.old_values[row]['client'] = int(new_value)
+                            self.db.connect()
+                            self.db.update_sales(sale_id, 'client', new_value)
+                    else:
+                        item.setText(str(self.old_values[row]['client']))
+                else:
+                    item.setText(str(self.old_values[row]['client']))
+
+            elif column in [2]:
+                self.db.connect()
+                products = self.db.get_id_products()
+                new_value = item.text()
+                if self.is_valid_number(new_value):
+                    if ('.' not in new_value):
+                        if int(new_value) not in products:
+                            item.setText(str(self.old_values[row]['product']))
+                        else:
+                            self.old_values[row]['product'] = int(new_value)
+                            self.db.connect()
+                            self.db.update_sales(sale_id, 'product', new_value)
+
+                    else:
+                        item.setText(str(self.old_values[row]['product']))
+                else:
+                    item.setText(str(self.old_values[row]['product']))
+
+            else:
+                self.db.connect()
+                new_value = item.text()
+                if new_value == '':
+                    item.setText(str(self.old_values[row]['date']))
+                else:
+                    self.old_values[row]['date'] = new_value
+                    self.db.update_sales(sale_id, 'date', new_value)
+
+    def is_valid_number(self, value):
+        try:
+            if value == "":
+                return False
+            float(value)
+            return True
+        except ValueError:
+            return False
     def go_to_clients(self):
         self.clients_window = Clients(self.db)
 
@@ -158,12 +305,12 @@ class Sales(object):
     def go_to_report(self):
         self.clients_window = Report(self.db)
 
-
 class Clients(QtWidgets.QMainWindow):
     def __init__(self, db):
         super().__init__()
         self.db = db
         self.old_values = {}
+        self.flag = False
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
@@ -283,35 +430,75 @@ class Clients(QtWidgets.QMainWindow):
         self.report_button.setText("Отчёт")
         self.report_button.clicked.connect(lambda: self.go_to_report())
         self.add_button.setText("Добавить")
-        self.add_button.clicked.connect(self.add_row)
+        self.add_button.clicked.connect(self.add_client)
+
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
         self.insert_data()
 
+    def add_client(self):
+        self.flag = True
+        name = 'Иван'
+        surname = 'Иванов'
+        patronymic = 'Иванович'
+        phone = '123-123-123'
+        row_position = self.tableWidget.rowCount()
+        self.old_values[row_position] = {'name': name,
+                                         'surname':surname,
+                                         'patronymic': patronymic,
+                                         'phone': phone
+                                         }
+        self.tableWidget.insertRow(row_position)
+        self.tableWidget.setItem(row_position, 0, QTableWidgetItem(name))
+        self.tableWidget.setItem(row_position, 1, QTableWidgetItem(surname))
+        self.tableWidget.setItem(row_position, 2, QTableWidgetItem(patronymic))
+        self.tableWidget.setItem(row_position, 3, QTableWidgetItem(phone))
+        self.db.connect()
+        row_values = []
+
+        for column in range(self.tableWidget.columnCount()):
+            item = self.tableWidget.item(row_position, column)
+            if item is not None:
+                row_values.append(item.text())
+
+        self.db.save_to_db_clients(row_values)
+        self.flag = False
+
+
     def on_item_changed(self, item):
-        row = item.row()
-        column = item.column()
+        if not self.flag:
+            row = item.row()
+            column = item.column()
+            self.db.connect()
+            records = self.db.fetch_all_records('clients')
+            client_id = records[row][0]
 
-        new_value = item.text()
+            new_value = item.text()
 
-        if new_value == '':
-            if column == 0:
-                item.setText(str(self.old_values[row]['name']))
-            elif column == 1:
-                item.setText(str(self.old_values[row]['surname']))
-            elif column == 2:
-                item.setText(str(self.old_values[row]['patronymic']))
-            elif column == 3:
-                item.setText(str(self.old_values[row]['phone']))
-        else:
-            if column == 0:
-                self.old_values[row]['name'] = new_value
-            elif column == 1:
-                self.old_values[row]['surname'] = new_value
-            elif column == 2:
-                self.old_values[row]['patronymic'] = new_value
-            elif column == 3:
-                self.old_values[row]['phone'] = new_value
+            if new_value == '':
+                if column == 0:
+                    item.setText(str(self.old_values[row]['name']))
+                elif column == 1:
+                    item.setText(str(self.old_values[row]['surname']))
+                elif column == 2:
+                    item.setText(str(self.old_values[row]['patronymic']))
+                elif column == 3:
+                    item.setText(str(self.old_values[row]['phone']))
+            else:
+                self.db.connect()
+                if column == 0:
+                    self.old_values[row]['name'] = new_value
+                    self.db.update_clients(client_id, 'name', new_value)
+                elif column == 1:
+                    self.old_values[row]['surname'] = new_value
+                    self.db.update_clients(client_id, 'surname', new_value)
+                elif column == 2:
+                    self.old_values[row]['patronymic'] = new_value
+                    self.db.update_clients(client_id, 'patronymic', new_value)
+                elif column == 3:
+                    self.old_values[row]['phone'] = new_value
+                    self.db.update_clients(client_id, 'phone', new_value)
+
 
     def insert_data(self):
         self.db.connect()
@@ -332,31 +519,6 @@ class Clients(QtWidgets.QMainWindow):
                     'phone': row[4]
                 }
         self.tableWidget.itemChanged.connect(self.on_item_changed)
-
-    def add_row(self):
-        current_row = self.tableWidget.rowCount()
-        self.tableWidget.insertRow(current_row)
-
-        # Автоматическое создание QTableWidgetItem для каждой ячейки новой строки
-        for col in range(self.tableWidget.columnCount()):
-            item = QTableWidgetItem("")
-            self.tableWidget.setItem(current_row, col, item)
-
-        # После добавления строки автоматически проверяем её заполненность и сохраняем в БД
-        self.save_row_to_db(current_row)
-
-    def save_row_to_db(self, row):
-        # Проверка на пустые ячейки в строке
-        row_data = []
-        for col in range(self.tableWidget.columnCount()):
-            item = self.tableWidget.item(row, col)
-            if item is None or item.text().strip() == "":
-                # Если ячейка пуста, выводим сообщение и выходим
-                QMessageBox.warning(self, "Ошибка", "Все ячейки строки должны быть заполнены.")
-                return
-            row_data.append(item.text().strip())
-        self.db.connect()
-        self.db.insert_row_into_clients(row_data)
 
 
 
@@ -495,20 +657,34 @@ class Categories(QtWidgets.QMainWindow):
         self.report_button.setText("Отчёт")
         self.report_button.clicked.connect(lambda: self.go_to_report())
         self.add_button.setText("Добавить")
+        self.add_button.clicked.connect(self.add_category)
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
         self.insert_data()
+
+    def add_category(self):
+        category = 'Категория'
+        row_position = self.tableWidget.rowCount()
+        self.old_values[row_position] = {'name': category}
+        self.tableWidget.insertRow(row_position)
+        self.tableWidget.setItem(row_position, 0, QTableWidgetItem(category))
+        self.db.connect()
+        item = self.tableWidget.item(row_position, 0)
+        self.db.save_to_db_categories(item.text())
+
 
     def on_item_changed(self, item):
         row = item.row()
         column = item.column()
 
         new_value = item.text()
-        print(new_value)
         if new_value == '':
             item.setText(str(self.old_values[row]['name']))
         else:
+            old_value = self.old_values[row]['name']
             self.old_values[row]['name'] = new_value
+            self.db.connect()
+            self.db.update_categories(new_value, old_value)
 
 
 
@@ -543,6 +719,7 @@ class Products(QtWidgets.QMainWindow):
         super().__init__()
         self.db = db
         self.old_values = {}
+        self.flag = False
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
@@ -648,7 +825,6 @@ class Products(QtWidgets.QMainWindow):
 
         self.renameUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
-
     def renameUi(self, MainWindow):
         MainWindow.setWindowTitle("Магазин")
         self.sales_button.setText("Продажи")
@@ -661,12 +837,54 @@ class Products(QtWidgets.QMainWindow):
         self.report_button.setText("Отчёт")
         self.report_button.clicked.connect(lambda: self.go_to_report())
         self.add_button.setText("Добавить")
+        self.add_button.clicked.connect(self.add_product)
+        self.check_categories()
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
         self.insert_data()
 
+    def add_product(self):
+        self.flag = True
+        self.db.connect()
+        categories = self.db.get_categories()
+        category = categories[0]
+        name = 'Наименование'
+        price = 2999
+        quantity = 1
+        row_position = self.tableWidget.rowCount()
+        self.old_values[row_position] = {'category': category,
+                                         'surname': name,
+                                         'patronymic': price,
+                                         'phone': quantity
+                                         }
+        self.tableWidget.insertRow(row_position)
+        self.tableWidget.setItem(row_position, 0, QTableWidgetItem(category))
+        self.tableWidget.setItem(row_position, 1, QTableWidgetItem(name))
+        self.tableWidget.setItem(row_position, 2, QTableWidgetItem(str(price)))
+        self.tableWidget.setItem(row_position, 3, QTableWidgetItem(str(quantity)))
+        self.db.connect()
 
+        row_values = []
 
+        item_c = self.tableWidget.item(row_position, 0)
+
+        id_cat = self.db.get_id_by_name(item_c.text())
+        self.db.connect()
+        row_values.append(id_cat)
+        row_values.append((self.tableWidget.item(row_position, 1).text()))
+        row_values.append((self.tableWidget.item(row_position, 2).text()))
+        row_values.append((self.tableWidget.item(row_position, 3).text()))
+        self.db.save_to_db_products(row_values)
+        self.flag = False
+
+    def check_categories(self):
+        self.db.connect()
+        categories = self.db.get_categories()
+
+        if categories:
+            self.add_button.setEnabled(True)
+        else:
+            self.add_button.setEnabled(False)
     def insert_data(self):
         self.db.connect()
         records = self.db.fetch_records_from_products()
@@ -687,41 +905,59 @@ class Products(QtWidgets.QMainWindow):
         self.tableWidget.itemChanged.connect(self.on_item_changed)
 
     def on_item_changed(self, item):
-
-        row = item.row()
-        column = item.column()
-
-        if column in [2, 3]:
-            new_value = item.text()
-
-            if not self.is_valid_number(new_value):
-
-                if column == 2:
-                    item.setText(str(self.old_values[row]['price']))
-                elif column == 3:
-                    item.setText(str(self.old_values[row]['quantity']))
-            else:
-
-                if column == 2:
-                    self.old_values[row]['price'] = float(new_value)
-                elif column == 3:
-                    self.old_values[row]['quantity'] = int(new_value)
-
-        elif column in [0]:
+        if not self.flag:
+            row = item.row()
+            column = item.column()
             self.db.connect()
-            categories = self.db.get_categories()
-            new_value = item.text()
-            if new_value == '' or new_value not in categories:
-                item.setText(str(self.old_values[row]['category']))
-            else:
-                self.old_values[row]['category'] = new_value
+            records = self.db.fetch_all_records('products')
+            product_id = records[row][0]
 
-        else:
-            new_value = item.text()
-            if new_value == '':
-                item.setText(str(self.old_values[row]['name']))
+            if column in [2, 3]:
+                new_value = item.text()
+
+                if not self.is_valid_number(new_value):
+
+                    if column == 2:
+                        item.setText(str(self.old_values[row]['price']))
+                    elif column == 3:
+                        item.setText(str(self.old_values[row]['quantity']))
+                else:
+                    self.db.connect()
+                    if column == 2:
+                        self.old_values[row]['price'] = float(new_value)
+                        self.db.update_products(product_id, 'price', new_value)
+                    elif column == 3:
+                        if '.' not in new_value:
+                            if (int(new_value) % 1 == 0):
+                                self.old_values[row]['quantity'] = int(new_value)
+                                self.db.update_products(product_id, 'quantity', new_value)
+                            else:
+                                item.setText(str(self.old_values[row]['quantity']))
+                        else:
+                            item.setText(str(self.old_values[row]['quantity']))
+
+            elif column in [0]:
+                self.db.connect()
+                categories = self.db.get_categories()
+                new_value = item.text()
+                if new_value == '' or new_value not in categories:
+                    item.setText(str(self.old_values[row]['category']))
+                else:
+                    self.old_values[row]['category'] = new_value
+                    self.db.connect()
+                    id_cat = self.db.get_id_by_name(new_value)
+                    self.db.connect()
+                    self.db.update_products(product_id, 'category', id_cat)
+
+
             else:
-                self.old_values[row]['name'] = new_value
+                self.db.connect()
+                new_value = item.text()
+                if new_value == '':
+                    item.setText(str(self.old_values[row]['name']))
+                else:
+                    self.old_values[row]['name'] = new_value
+                    self.db.update_products(product_id, 'name_prod', new_value)
 
     def is_valid_number(self, value):
         try:
@@ -887,7 +1123,6 @@ if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
     db = Database()
-    # db.connect()
 
     MainWindow = QtWidgets.QMainWindow()
     MainWindow.resize(1152, 864)
