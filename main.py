@@ -1,12 +1,18 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 
-table = ''
+from queries import Database
+import mysql.connector
+from mysql.connector import Error
+from config import db_config
+
+
 
 class Sales(object):
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
-        table = 'sales'
-        print(table)
+        self.db = db
+
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
@@ -96,7 +102,6 @@ class Sales(object):
         self.frame_9 = QtWidgets.QFrame(self.frame_6)
         self.frame_9.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_9.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_9.setObjectName("frame_9")
         self.gridLayout_15 = QtWidgets.QGridLayout(self.frame_9)
         self.gridLayout_15.setContentsMargins(0, 0, 0, 0)
         self.tableWidget = QtWidgets.QTableWidget(self.frame_9)
@@ -128,25 +133,37 @@ class Sales(object):
         self.add_button.setText("Добавить")
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
+        self.insert_data()
 
+    def insert_data(self):
+        self.db.connect()
+        records = self.db.fetch_all_records('sales')
+
+        if records is not None:
+            self.tableWidget.setRowCount(len(records))
+            for row_idx, row_data in enumerate(records):
+                for col_idx, col_data in enumerate(row_data[1:]):
+                    item = QtWidgets.QTableWidgetItem(str(col_data))
+                    print(item.text())
+                    self.tableWidget.setItem(row_idx, col_idx, item)
     def go_to_clients(self):
-        self.clients_window = Clients()
+        self.clients_window = Clients(self.db)
 
     def go_to_products(self):
-        self.clients_window = Products()
+        self.clients_window = Products(self.db)
 
     def go_to_categories(self):
-        self.clients_window = Categories()
+        self.clients_window = Categories(self.db)
 
     def go_to_report(self):
-        self.clients_window = Report()
+        self.clients_window = Report(self.db)
 
 
 class Clients(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
-        table = 'clients'
-        print(table)
+        self.db = db
+        self.old_values = {}
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
@@ -266,28 +283,100 @@ class Clients(QtWidgets.QMainWindow):
         self.report_button.setText("Отчёт")
         self.report_button.clicked.connect(lambda: self.go_to_report())
         self.add_button.setText("Добавить")
+        self.add_button.clicked.connect(self.add_row)
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
+        self.insert_data()
+
+    def on_item_changed(self, item):
+        row = item.row()
+        column = item.column()
+
+        new_value = item.text()
+
+        if new_value == '':
+            if column == 0:
+                item.setText(str(self.old_values[row]['name']))
+            elif column == 1:
+                item.setText(str(self.old_values[row]['surname']))
+            elif column == 2:
+                item.setText(str(self.old_values[row]['patronymic']))
+            elif column == 3:
+                item.setText(str(self.old_values[row]['phone']))
+        else:
+            if column == 0:
+                self.old_values[row]['name'] = new_value
+            elif column == 1:
+                self.old_values[row]['surname'] = new_value
+            elif column == 2:
+                self.old_values[row]['patronymic'] = new_value
+            elif column == 3:
+                self.old_values[row]['phone'] = new_value
+
+    def insert_data(self):
+        self.db.connect()
+        records = self.db.fetch_all_records('clients')
+
+        if records is not None:
+            self.tableWidget.setRowCount(len(records))
+            for row_index, row in enumerate(records):
+                self.tableWidget.setItem(row_index, 0, QTableWidgetItem(row[1]))
+                self.tableWidget.setItem(row_index, 1, QTableWidgetItem(row[2]))
+                self.tableWidget.setItem(row_index, 2, QTableWidgetItem(row[3]))
+                self.tableWidget.setItem(row_index, 3, QTableWidgetItem(row[4]))
+
+                self.old_values[row_index] = {
+                    'name': row[1],
+                    'surname': row[2],
+                    'patronymic': row[3],
+                    'phone': row[4]
+                }
+        self.tableWidget.itemChanged.connect(self.on_item_changed)
+
+    def add_row(self):
+        current_row = self.tableWidget.rowCount()
+        self.tableWidget.insertRow(current_row)
+
+        # Автоматическое создание QTableWidgetItem для каждой ячейки новой строки
+        for col in range(self.tableWidget.columnCount()):
+            item = QTableWidgetItem("")
+            self.tableWidget.setItem(current_row, col, item)
+
+        # После добавления строки автоматически проверяем её заполненность и сохраняем в БД
+        self.save_row_to_db(current_row)
+
+    def save_row_to_db(self, row):
+        # Проверка на пустые ячейки в строке
+        row_data = []
+        for col in range(self.tableWidget.columnCount()):
+            item = self.tableWidget.item(row, col)
+            if item is None or item.text().strip() == "":
+                # Если ячейка пуста, выводим сообщение и выходим
+                QMessageBox.warning(self, "Ошибка", "Все ячейки строки должны быть заполнены.")
+                return
+            row_data.append(item.text().strip())
+        self.db.connect()
+        self.db.insert_row_into_clients(row_data)
+
+
 
     def go_to_sales(self):
-        self.clients_window = Sales()
+        self.clients_window = Sales(self.db)
 
     def go_to_products(self):
-        self.clients_window = Products()
+        self.clients_window = Products(self.db)
 
     def go_to_categories(self):
-        self.clients_window = Categories()
+        self.clients_window = Categories(self.db)
 
     def go_to_report(self):
-        self.clients_window = Report()
-
-
+        self.clients_window = Report(self.db)
 
 class Categories(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
-        table = 'categories'
-        print(table)
+        self.db = db
+        self.old_values = {}
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
@@ -377,7 +466,6 @@ class Categories(QtWidgets.QMainWindow):
         self.frame_9 = QtWidgets.QFrame(self.frame_6)
         self.frame_9.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_9.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_9.setObjectName("frame_9")
         self.gridLayout_15 = QtWidgets.QGridLayout(self.frame_9)
         self.gridLayout_15.setContentsMargins(0, 0, 0, 0)
         self.tableWidget = QtWidgets.QTableWidget(self.frame_9)
@@ -409,25 +497,52 @@ class Categories(QtWidgets.QMainWindow):
         self.add_button.setText("Добавить")
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
+        self.insert_data()
+
+    def on_item_changed(self, item):
+        row = item.row()
+        column = item.column()
+
+        new_value = item.text()
+        print(new_value)
+        if new_value == '':
+            item.setText(str(self.old_values[row]['name']))
+        else:
+            self.old_values[row]['name'] = new_value
+
+
+
+    def insert_data(self):
+        self.db.connect()
+        records = self.db.fetch_all_records('categories')
+
+        if records is not None:
+            self.tableWidget.setRowCount(len(records))
+            for row_index, row in enumerate(records):
+                self.tableWidget.setItem(row_index, 0, QTableWidgetItem(row[1]))
+
+                self.old_values[row_index] = {
+                    'name': row[1],
+                }
+        self.tableWidget.itemChanged.connect(self.on_item_changed)
 
     def go_to_sales(self):
-        self.clients_window = Sales()
+        self.clients_window = Sales(self.db)
 
     def go_to_products(self):
-        self.clients_window = Products()
+        self.clients_window = Products(self.db)
 
     def go_to_clients(self):
-        self.clients_window = Clients()
+        self.clients_window = Clients(self.db)
 
     def go_to_report(self):
-        self.clients_window = Report()
-
+        self.clients_window = Report(self.db)
 
 class Products(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
-        table = 'products'
-        print(table)
+        self.db = db
+        self.old_values = {}
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
@@ -517,7 +632,6 @@ class Products(QtWidgets.QMainWindow):
         self.frame_9 = QtWidgets.QFrame(self.frame_6)
         self.frame_9.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_9.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_9.setObjectName("frame_9")
         self.gridLayout_15 = QtWidgets.QGridLayout(self.frame_9)
         self.gridLayout_15.setContentsMargins(0, 0, 0, 0)
         self.tableWidget = QtWidgets.QTableWidget(self.frame_9)
@@ -549,24 +663,93 @@ class Products(QtWidgets.QMainWindow):
         self.add_button.setText("Добавить")
         self.delete_button.setText("Удалить")
         self.sort_label.setText("Сортировать по")
+        self.insert_data()
+
+
+
+    def insert_data(self):
+        self.db.connect()
+        records = self.db.fetch_records_from_products()
+        if records is not None:
+            self.tableWidget.setRowCount(len(records))
+            for row_index, row in enumerate(records):
+                self.tableWidget.setItem(row_index, 0, QTableWidgetItem(row[0]))
+                self.tableWidget.setItem(row_index, 1, QTableWidgetItem(row[1]))
+                self.tableWidget.setItem(row_index, 2, QTableWidgetItem(str(row[2])))
+                self.tableWidget.setItem(row_index, 3, QTableWidgetItem(str(row[3])))
+
+                self.old_values[row_index] = {
+                    'category': row[0],
+                    'name': row[1],
+                    'price': row[2],
+                    'quantity': row[3]
+                }
+        self.tableWidget.itemChanged.connect(self.on_item_changed)
+
+    def on_item_changed(self, item):
+
+        row = item.row()
+        column = item.column()
+
+        if column in [2, 3]:
+            new_value = item.text()
+
+            if not self.is_valid_number(new_value):
+
+                if column == 2:
+                    item.setText(str(self.old_values[row]['price']))
+                elif column == 3:
+                    item.setText(str(self.old_values[row]['quantity']))
+            else:
+
+                if column == 2:
+                    self.old_values[row]['price'] = float(new_value)
+                elif column == 3:
+                    self.old_values[row]['quantity'] = int(new_value)
+
+        elif column in [0]:
+            self.db.connect()
+            categories = self.db.get_categories()
+            new_value = item.text()
+            if new_value == '' or new_value not in categories:
+                item.setText(str(self.old_values[row]['category']))
+            else:
+                self.old_values[row]['category'] = new_value
+
+        else:
+            new_value = item.text()
+            if new_value == '':
+                item.setText(str(self.old_values[row]['name']))
+            else:
+                self.old_values[row]['name'] = new_value
+
+    def is_valid_number(self, value):
+        try:
+            if value == "":
+                return False
+            float(value)
+            return True
+        except ValueError:
+            return False
 
     def go_to_sales(self):
-        self.clients_window = Sales()
+        self.clients_window = Sales(self.db)
 
     def go_to_clients(self):
-        self.clients_window = Clients()
+        self.clients_window = Clients(self.db)
 
     def go_to_categories(self):
-        self.clients_window = Categories()
+        self.clients_window = Categories(self.db)
 
     def go_to_report(self):
-        self.clients_window = Report()
-
-
+        self.clients_window = Report(self.db)
 
 class Report(object):
-    def __init__(self):
+    def __init__(self, db):
         super().__init__()
+        self.db = db
+
+
         MainWindow.setObjectName("MainWindow")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -687,23 +870,29 @@ class Report(object):
 
 
     def go_to_clients(self):
-        self.clients_window = Clients()
+        self.clients_window = Clients(self.db)
 
     def go_to_products(self):
-        self.clients_window = Products()
+        self.clients_window = Products(self.db)
 
     def go_to_categories(self):
-        self.clients_window = Categories()
+        self.clients_window = Categories(self.db)
 
     def go_to_sales(self):
-        self.clients_window = Sales()
+        self.clients_window = Sales(self.db)
+
 
 
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
+    db = Database()
+    # db.connect()
+
     MainWindow = QtWidgets.QMainWindow()
     MainWindow.resize(1152, 864)
-    ui = Sales()
+    ui = Sales(db)
     MainWindow.show()
+
     sys.exit(app.exec_())
+
