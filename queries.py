@@ -20,15 +20,8 @@ class Database:
                 self.connection = None
 
 
-
-
     def close_connection(self):
             self.connection.close()
-
-
-
-    def get_connection(self):
-        return self.connection
 
 
     def fetch_all_records(self, table_name):
@@ -232,5 +225,31 @@ class Database:
             self.connection.commit()
         except Error as e:
             print(e)
+        finally:
+            self.close_connection()
+
+    def delete_record(self, rec_id, table, column):
+        try:
+            cursor = self.connection.cursor()
+            query = f"DELETE FROM {table} WHERE {column} = %s"
+            cursor.execute(query, (rec_id))
+            self.connection.commit()
+            return True
+        except Error as e:
+            return False
+        finally:
+            self.close_connection()
+
+    def get_sales_data(self, date):
+        try:
+            cursor = self.connection.cursor()
+            query = f"SELECT SUM(quantity), SUM(amount) FROM sales WHERE date = %s"
+            cursor.execute(query, date)
+            result = cursor.fetchall()
+            result = [item for sub_tuple in result for item in sub_tuple]
+            return result
+        except Error as e:
+            print(e)
+            return None
         finally:
             self.close_connection()

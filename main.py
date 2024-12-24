@@ -2,9 +2,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 
 from queries import Database
-import mysql.connector
-from mysql.connector import Error
-from config import db_config
+
 
 
 
@@ -86,6 +84,8 @@ class Sales(object):
         self.gridLayout_6.addWidget(self.sort_label, 1, 0, 1, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
         self.comboBox = QtWidgets.QComboBox(self.frame_7)
         self.comboBox.setMaximumSize(QtCore.QSize(200, 16777215))
+        self.comboBox.addItems(['Клиент', 'Дата', 'Товар', 'Количество', 'Сумма'])
+        self.comboBox.currentIndexChanged.connect(self.sort_table)
         self.gridLayout_6.addWidget(self.comboBox, 1, 1, 1, 1, QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
         self.gridLayout_13.addLayout(self.gridLayout_6, 0, 0, 1, 1)
         self.gridLayout_9.addWidget(self.frame_7, 0, 0, 1, 1, QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
@@ -96,6 +96,7 @@ class Sales(object):
         self.gridLayout_14 = QtWidgets.QGridLayout(self.frame_8)
         self.gridLayout_12 = QtWidgets.QGridLayout()
         self.lineEdit = QtWidgets.QLineEdit(self.frame_8)
+        self.lineEdit.setPlaceholderText('Поиск..')
         self.lineEdit.setMaximumSize(QtCore.QSize(1000, 16777215))
         self.gridLayout_12.addWidget(self.lineEdit, 0, 0, 1, 1, QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter)
         self.gridLayout_14.addLayout(self.gridLayout_12, 0, 0, 1, 1)
@@ -121,7 +122,9 @@ class Sales(object):
         self.renameUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+
     def renameUi(self, MainWindow):
+
         MainWindow.setWindowTitle("Магазин")
         self.sales_button.setText("Продажи")
         self.clients_button.setText("Клиенты")
@@ -136,8 +139,32 @@ class Sales(object):
         self.add_button.clicked.connect(self.add_sales)
         self.check_clients_and_products()
         self.delete_button.setText("Удалить")
+        self.delete_button.clicked.connect(self.delete_row)
         self.sort_label.setText("Сортировать по")
         self.insert_data()
+
+    def sort_table(self):
+        column_index = self.comboBox.currentIndex()
+
+        if column_index < 0:
+            return
+
+        self.tableWidget.sortItems(column_index)
+
+    def delete_row(self):
+        selected_items = self.tableWidget.selectedItems()
+        if not selected_items:
+            return
+
+        row_to_delete = selected_items[0].row()
+        self.db.connect()
+        categories = self.db.fetch_all_records('sales')
+        record_id = categories[row_to_delete][0]
+        self.db.connect()
+        if self.db.delete_record(record_id, 'sales', 'id_sale'):
+            self.tableWidget.removeRow(row_to_delete)
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось удалить запись из базы данных.")
 
     def add_sales(self):
         self.flag = True
@@ -382,6 +409,8 @@ class Clients(QtWidgets.QMainWindow):
         self.gridLayout_6.addWidget(self.sort_label, 1, 0, 1, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
         self.comboBox = QtWidgets.QComboBox(self.frame_7)
         self.comboBox.setMaximumSize(QtCore.QSize(200, 16777215))
+        self.comboBox.addItems(['Имя', 'Фамилия', 'Отчество', 'Телефон'])
+        self.comboBox.currentIndexChanged.connect(self.sort_table)
         self.gridLayout_6.addWidget(self.comboBox, 1, 1, 1, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
         self.gridLayout_13.addLayout(self.gridLayout_6, 0, 0, 1, 1)
         self.gridLayout_9.addWidget(self.frame_7, 0, 0, 1, 1, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
@@ -392,6 +421,8 @@ class Clients(QtWidgets.QMainWindow):
         self.gridLayout_14 = QtWidgets.QGridLayout(self.frame_8)
         self.gridLayout_12 = QtWidgets.QGridLayout()
         self.lineEdit = QtWidgets.QLineEdit(self.frame_8)
+        self.lineEdit.setPlaceholderText('Поиск..')
+        self.lineEdit.textChanged.connect(self.filter_table)
         self.lineEdit.setMaximumSize(QtCore.QSize(1000, 16777215))
         self.gridLayout_12.addWidget(self.lineEdit, 0, 0, 1, 1, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.gridLayout_14.addLayout(self.gridLayout_12, 0, 0, 1, 1)
@@ -418,6 +449,20 @@ class Clients(QtWidgets.QMainWindow):
         self.renameUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+    def filter_table(self):
+
+        search_text = self.lineEdit.text().lower()
+
+        for row in range(self.tableWidget.rowCount()):
+            item1 = self.tableWidget.item(row, 0).text().lower()
+            item2 = self.tableWidget.item(row, 1).text().lower()
+            item3 = self.tableWidget.item(row, 2).text().lower()
+            item4 = self.tableWidget.item(row, 3).text().lower()
+            if (search_text in item1) or (search_text in item2) or (search_text in item3) or (search_text in item4):
+                self.tableWidget.showRow(row)
+            else:
+                self.tableWidget.hideRow(row)
+
     def renameUi(self, MainWindow):
         MainWindow.setWindowTitle("Магазин")
         self.sales_button.setText("Продажи")
@@ -431,10 +476,33 @@ class Clients(QtWidgets.QMainWindow):
         self.report_button.clicked.connect(lambda: self.go_to_report())
         self.add_button.setText("Добавить")
         self.add_button.clicked.connect(self.add_client)
-
         self.delete_button.setText("Удалить")
+        self.delete_button.clicked.connect(self.delete_row)
         self.sort_label.setText("Сортировать по")
         self.insert_data()
+
+    def sort_table(self):
+        column_index = self.comboBox.currentIndex()
+
+        if column_index < 0:
+            return
+
+        self.tableWidget.sortItems(column_index)
+
+    def delete_row(self):
+        selected_items = self.tableWidget.selectedItems()
+        if not selected_items:
+            return
+
+        row_to_delete = selected_items[0].row()
+        self.db.connect()
+        categories = self.db.fetch_all_records('clients')
+        record_id = categories[row_to_delete][0]
+        self.db.connect()
+        if self.db.delete_record(record_id, 'clients', 'id_client'):
+            self.tableWidget.removeRow(row_to_delete)
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось удалить запись из базы данных.")
 
     def add_client(self):
         self.flag = True
@@ -610,6 +678,8 @@ class Categories(QtWidgets.QMainWindow):
         self.gridLayout_6.addWidget(self.sort_label, 1, 0, 1, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
         self.comboBox = QtWidgets.QComboBox(self.frame_7)
         self.comboBox.setMaximumSize(QtCore.QSize(200, 16777215))
+        self.comboBox.addItems(['Наименование'])
+        self.comboBox.currentIndexChanged.connect(self.sort_table)
         self.gridLayout_6.addWidget(self.comboBox, 1, 1, 1, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
         self.gridLayout_13.addLayout(self.gridLayout_6, 0, 0, 1, 1)
         self.gridLayout_9.addWidget(self.frame_7, 0, 0, 1, 1, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
@@ -620,6 +690,8 @@ class Categories(QtWidgets.QMainWindow):
         self.gridLayout_14 = QtWidgets.QGridLayout(self.frame_8)
         self.gridLayout_12 = QtWidgets.QGridLayout()
         self.lineEdit = QtWidgets.QLineEdit(self.frame_8)
+        self.lineEdit.setPlaceholderText('Поиск..')
+        self.lineEdit.textChanged.connect(self.filter_table)
         self.lineEdit.setMaximumSize(QtCore.QSize(1000, 16777215))
         self.gridLayout_12.addWidget(self.lineEdit, 0, 0, 1, 1, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.gridLayout_14.addLayout(self.gridLayout_12, 0, 0, 1, 1)
@@ -659,8 +731,43 @@ class Categories(QtWidgets.QMainWindow):
         self.add_button.setText("Добавить")
         self.add_button.clicked.connect(self.add_category)
         self.delete_button.setText("Удалить")
+        self.delete_button.clicked.connect(self.delete_row)
         self.sort_label.setText("Сортировать по")
         self.insert_data()
+
+    def sort_table(self):
+        column_index = self.comboBox.currentIndex()
+
+        if column_index < 0:
+            return
+
+        self.tableWidget.sortItems(column_index)
+
+    def filter_table(self):
+
+        search_text = self.lineEdit.text().lower()
+
+        for row in range(self.tableWidget.rowCount()):
+            item_name = self.tableWidget.item(row, 0).text().lower()
+            if search_text in item_name:
+                self.tableWidget.showRow(row)
+            else:
+                self.tableWidget.hideRow(row)
+
+    def delete_row(self):
+        selected_items = self.tableWidget.selectedItems()
+        if not selected_items:
+            return
+
+        row_to_delete = selected_items[0].row()
+        self.db.connect()
+        categories = self.db.fetch_all_records('categories')
+        record_id = categories[row_to_delete][0]
+        self.db.connect()
+        if self.db.delete_record(record_id, 'categories', 'id_category'):
+            self.tableWidget.removeRow(row_to_delete)
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось удалить запись из базы данных.")
 
     def add_category(self):
         category = 'Категория'
@@ -792,6 +899,8 @@ class Products(QtWidgets.QMainWindow):
         self.comboBox = QtWidgets.QComboBox(self.frame_7)
         self.comboBox.setMaximumSize(QtCore.QSize(200, 16777215))
         self.gridLayout_6.addWidget(self.comboBox, 1, 1, 1, 1, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter)
+        self.comboBox.addItems(['Категория', 'Наименование', 'Цена', 'Количество'])
+        self.comboBox.currentIndexChanged.connect(self.sort_table)
         self.gridLayout_13.addLayout(self.gridLayout_6, 0, 0, 1, 1)
         self.gridLayout_9.addWidget(self.frame_7, 0, 0, 1, 1, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.frame_8 = QtWidgets.QFrame(self.frame_5)
@@ -801,6 +910,8 @@ class Products(QtWidgets.QMainWindow):
         self.gridLayout_14 = QtWidgets.QGridLayout(self.frame_8)
         self.gridLayout_12 = QtWidgets.QGridLayout()
         self.lineEdit = QtWidgets.QLineEdit(self.frame_8)
+        self.lineEdit.setPlaceholderText('Поиск..')
+        self.lineEdit.textChanged.connect(self.filter_table)
         self.lineEdit.setMaximumSize(QtCore.QSize(1000, 16777215))
         self.gridLayout_12.addWidget(self.lineEdit, 0, 0, 1, 1, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.gridLayout_14.addLayout(self.gridLayout_12, 0, 0, 1, 1)
@@ -825,6 +936,29 @@ class Products(QtWidgets.QMainWindow):
 
         self.renameUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+
+
+    def sort_table(self):
+        column_index = self.comboBox.currentIndex()
+
+        if column_index < 0:
+            return
+
+        self.tableWidget.sortItems(column_index)
+    def filter_table(self):
+
+        search_text = self.lineEdit.text().lower()
+
+        for row in range(self.tableWidget.rowCount()):
+            item1 = self.tableWidget.item(row, 0).text().lower()
+            item2 = self.tableWidget.item(row, 1).text().lower()
+            item3 = self.tableWidget.item(row, 2).text().lower()
+            item4 = self.tableWidget.item(row, 3).text().lower()
+            if (search_text in item1) or (search_text in item2) or (search_text in item3) or (search_text in item4):
+                self.tableWidget.showRow(row)
+            else:
+                self.tableWidget.hideRow(row)
+
     def renameUi(self, MainWindow):
         MainWindow.setWindowTitle("Магазин")
         self.sales_button.setText("Продажи")
@@ -840,8 +974,24 @@ class Products(QtWidgets.QMainWindow):
         self.add_button.clicked.connect(self.add_product)
         self.check_categories()
         self.delete_button.setText("Удалить")
+        self.delete_button.clicked.connect(self.delete_row)
         self.sort_label.setText("Сортировать по")
         self.insert_data()
+
+    def delete_row(self):
+        selected_items = self.tableWidget.selectedItems()
+        if not selected_items:
+            return
+
+        row_to_delete = selected_items[0].row()
+        self.db.connect()
+        categories = self.db.fetch_all_records('products')
+        record_id = categories[row_to_delete][0]
+        self.db.connect()
+        if self.db.delete_record(record_id, 'products', 'id_product'):
+            self.tableWidget.removeRow(row_to_delete)
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось удалить запись из базы данных.")
 
     def add_product(self):
         self.flag = True
@@ -985,58 +1135,41 @@ class Report(object):
         super().__init__()
         self.db = db
 
-
-        MainWindow.setObjectName("MainWindow")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
-        self.centralwidget.setObjectName("centralwidget")
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
-        self.gridLayout.setObjectName("gridLayout")
         self.frame = QtWidgets.QFrame(self.centralwidget)
         self.frame.setMaximumSize(QtCore.QSize(200, 16777215))
         self.frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame.setObjectName("frame")
         self.gridLayout_2 = QtWidgets.QGridLayout(self.frame)
         self.gridLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.gridLayout_2.setObjectName("gridLayout_2")
         self.frame_3 = QtWidgets.QFrame(self.frame)
         self.frame_3.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_3.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_3.setObjectName("frame_3")
         self.gridLayout_8 = QtWidgets.QGridLayout(self.frame_3)
-        self.gridLayout_8.setObjectName("gridLayout_8")
         self.gridLayout_4 = QtWidgets.QGridLayout()
         self.gridLayout_4.setVerticalSpacing(0)
-        self.gridLayout_4.setObjectName("gridLayout_4")
         self.sales_button = QtWidgets.QPushButton(self.frame_3)
-        self.sales_button.setObjectName("pushButton")
         self.gridLayout_4.addWidget(self.sales_button, 0, 0, 1, 1)
         self.clients_button = QtWidgets.QPushButton(self.frame_3)
-        self.clients_button.setObjectName("pushButton_2")
         self.gridLayout_4.addWidget(self.clients_button, 1, 0, 1, 1)
         self.products_button = QtWidgets.QPushButton(self.frame_3)
-        self.products_button.setObjectName("pushButton_3")
         self.gridLayout_4.addWidget(self.products_button, 2, 0, 1, 1)
         self.categories_button = QtWidgets.QPushButton(self.frame_3)
-        self.categories_button.setObjectName("pushButton_4")
         self.gridLayout_4.addWidget(self.categories_button, 3, 0, 1, 1)
         self.report_button = QtWidgets.QPushButton(self.frame_3)
-        self.report_button.setObjectName("pushButton_5")
         self.gridLayout_4.addWidget(self.report_button, 4, 0, 1, 1)
         self.gridLayout_8.addLayout(self.gridLayout_4, 0, 0, 1, 1)
         self.gridLayout_2.addWidget(self.frame_3, 0, 0, 1, 1, QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.frame_4 = QtWidgets.QFrame(self.frame)
         self.frame_4.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_4.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_4.setObjectName("frame_4")
         self.gridLayout_10 = QtWidgets.QGridLayout(self.frame_4)
         self.gridLayout_10.setContentsMargins(11, 30, 11, 30)
-        self.gridLayout_10.setObjectName("gridLayout_10")
         self.gridLayout_5 = QtWidgets.QGridLayout()
         self.gridLayout_5.setVerticalSpacing(20)
-        self.gridLayout_5.setObjectName("gridLayout_5")
         self.form_button = QtWidgets.QPushButton(self.frame_4)
-        self.form_button.setObjectName("pushButton_7")
+
         self.gridLayout_5.addWidget(self.form_button, 0, 0, 1, 1)
         self.gridLayout_10.addLayout(self.gridLayout_5, 0, 0, 1, 1)
         self.gridLayout_2.addWidget(self.frame_4, 1, 0, 1, 1, QtCore.Qt.AlignHCenter|QtCore.Qt.AlignBottom)
@@ -1044,44 +1177,33 @@ class Report(object):
         self.frame_2 = QtWidgets.QFrame(self.centralwidget)
         self.frame_2.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_2.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_2.setObjectName("frame_2")
         self.gridLayout_3 = QtWidgets.QGridLayout(self.frame_2)
         self.gridLayout_3.setContentsMargins(10, 0, 0, 0)
-        self.gridLayout_3.setObjectName("gridLayout_3")
         self.frame_6 = QtWidgets.QFrame(self.frame_2)
         self.frame_6.setMaximumSize(QtCore.QSize(1412142, 12412412))
         self.frame_6.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_6.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_6.setObjectName("frame_6")
         self.gridLayout_11 = QtWidgets.QGridLayout(self.frame_6)
         self.gridLayout_11.setContentsMargins(11, 11, 0, 0)
-        self.gridLayout_11.setObjectName("gridLayout_11")
         self.gridLayout_7 = QtWidgets.QGridLayout()
-        self.gridLayout_7.setObjectName("gridLayout_7")
         self.frame_5 = QtWidgets.QFrame(self.frame_6)
         self.frame_5.setMaximumSize(QtCore.QSize(12213, 70))
         self.frame_5.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_5.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_5.setObjectName("frame_5")
         self.gridLayout_9 = QtWidgets.QGridLayout(self.frame_5)
         self.gridLayout_9.setContentsMargins(-1, 0, 0, 0)
         self.gridLayout_9.setHorizontalSpacing(7)
-        self.gridLayout_9.setObjectName("gridLayout_9")
         self.gridLayout_7.addWidget(self.frame_5, 1, 0, 1, 1)
         self.frame_9 = QtWidgets.QFrame(self.frame_6)
         self.frame_9.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame_9.setFrameShadow(QtWidgets.QFrame.Raised)
-        self.frame_9.setObjectName("frame_9")
         self.gridLayout_15 = QtWidgets.QGridLayout(self.frame_9)
         self.gridLayout_15.setContentsMargins(0, 0, 0, 0)
-        self.gridLayout_15.setObjectName("gridLayout_15")
         self.textEdit = QtWidgets.QTextEdit(self.frame_9)
-        self.textEdit.setObjectName("textEdit")
         self.gridLayout_15.addWidget(self.textEdit, 0, 1, 1, 1)
         self.gridLayout_7.addWidget(self.frame_9, 2, 0, 1, 1)
         self.dateEdit = QtWidgets.QDateEdit(self.frame_6)
-        self.dateEdit.setMaximumSize(QtCore.QSize(100, 16777215))
-        self.dateEdit.setObjectName("dateEdit")
+        self.dateEdit.setMaximumSize(QtCore.QSize(200, 16777215))
         self.gridLayout_7.addWidget(self.dateEdit, 0, 0, 1, 1)
         self.gridLayout_11.addLayout(self.gridLayout_7, 0, 0, 1, 1)
         self.gridLayout_3.addWidget(self.frame_6, 1, 0, 1, 1)
@@ -1093,6 +1215,7 @@ class Report(object):
 
     def renameUi(self, MainWindow):
         self.form_button.setText("Сформировать отчёт")
+        self.form_button.clicked.connect(self.form_report)
         MainWindow.setWindowTitle("Магазин")
         self.sales_button.setText("Продажи")
         self.sales_button.clicked.connect(lambda: self.go_to_sales())
@@ -1103,6 +1226,18 @@ class Report(object):
         self.categories_button.setText("Категории")
         self.categories_button.clicked.connect(lambda: self.go_to_categories())
         self.report_button.setText("Отчёт")
+
+    def form_report(self):
+        date = self.dateEdit.date().toString('dd.MM.yyyy')
+        self.db.connect()
+        result = self.db.get_sales_data(date)
+        total_quantity, total_revenue = result
+        result_text = f"Дата: {date}\n" \
+                      f"Количество проданных товаров: {total_quantity if total_quantity is not None else 0}\n" \
+                      f"Сумма выручки: {total_revenue:.2f} руб." if total_revenue is not None else "Сумма выручки: 0.00 руб."
+
+
+        self.textEdit.append(result_text)
 
 
     def go_to_clients(self):
@@ -1126,6 +1261,55 @@ if __name__ == "__main__":
 
     MainWindow = QtWidgets.QMainWindow()
     MainWindow.resize(1152, 864)
+    MainWindow.setStyleSheet("""
+            QPushButton {
+                background-color: #007BFF;
+                color: white; 
+                border: none; 
+                padding: 10px;
+                text-align: center;
+                text-decoration: none; 
+                display: inline-block; 
+                font-size: 14px;
+                margin: 4px 2px;
+                border-radius: 8px; 
+            }
+            QPushButton:hover {
+                background-color: #45a049; 
+            }
+            QPushButton:pressed {
+                background-color: #3e8e41; 
+            }
+            QTextEdit {font-size:20px}
+            QDateEdit {font-size:20px}
+            QTableWidget {
+                        border: 1px solid #ccc;
+                        border-radius: 5px;
+                        font-size: 18px;
+                    }
+                    QHeaderView::section {
+                        background-color: #f0f0f0;
+                        padding: 10px;
+                        font-weight: bold;
+                    }
+                    QTableWidget::item {
+                        padding: 10px;
+                    }
+                    QComboBox {
+                        padding: 10px;
+                        font-size: 18px;
+                        border: 1px solid #ccc;
+                        border-radius: 5px;
+                    }
+
+                    QComboBox::indicator {
+                        width: 10px;
+                        height: 10px;
+                    }
+                    QLineEdit {border: 1px solid #ccc;border-radius: 5px; font-size: 20px}'
+                    'QLabel {font-size: 20px}'          
+        
+        """)
     ui = Sales(db)
     MainWindow.show()
 
